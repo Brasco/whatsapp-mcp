@@ -12,7 +12,13 @@ from whatsapp import (
     send_message as whatsapp_send_message,
     send_file as whatsapp_send_file,
     send_audio_message as whatsapp_audio_voice_message,
-    download_media as whatsapp_download_media
+    download_media as whatsapp_download_media,
+    list_groups as whatsapp_list_groups,
+    get_group_info as whatsapp_get_group_info,
+    rename_group as whatsapp_rename_group,
+    create_group as whatsapp_create_group,
+    update_group_participants as whatsapp_update_group_participants,
+    get_group_invite_link as whatsapp_get_group_invite_link,
 )
 
 # Initialize FastMCP server
@@ -245,6 +251,73 @@ def download_media(message_id: str, chat_jid: str) -> Dict[str, Any]:
             "success": False,
             "message": "Failed to download media"
         }
+
+
+# --- Group administration ---
+# Operations that change a group are visible to all its members:
+# the tool descriptions ask the model for explicit user confirmation first.
+
+def _result(ok, payload):
+    return {"success": ok, "result": payload} if ok else {"success": False, "message": payload}
+
+@mcp.tool()
+def list_groups() -> Dict[str, Any]:
+    """List the WhatsApp groups the account belongs to (JID, name, participant count). Read-only."""
+    return _result(*whatsapp_list_groups())
+
+@mcp.tool()
+def get_group_info(group_jid: str) -> Dict[str, Any]:
+    """Get a group's name and full participant list (JID, phone number, admin flags). Read-only.
+
+    Args:
+        group_jid: The group JID, ending in @g.us
+    """
+    return _result(*whatsapp_get_group_info(group_jid))
+
+@mcp.tool()
+def rename_group(group_jid: str, new_name: str) -> Dict[str, Any]:
+    """Rename a WhatsApp group. Visible to all members: only after explicit confirmation from the user.
+
+    Args:
+        group_jid: The group JID, ending in @g.us
+        new_name: The new group name
+    """
+    return _result(*whatsapp_rename_group(group_jid, new_name))
+
+@mcp.tool()
+def create_group(name: str, participants: List[str]) -> Dict[str, Any]:
+    """Create a new WhatsApp group with the given participants. Only after explicit confirmation from the user.
+    Participants whose privacy settings block being added come back with a non-zero "error" (e.g. 403):
+    they must be invited with a link instead.
+
+    Args:
+        name: The group name
+        participants: Phone numbers with country code (e.g. "393331234567") or user JIDs
+    """
+    return _result(*whatsapp_create_group(name, participants))
+
+@mcp.tool()
+def update_group_participants(group_jid: str, action: str, participants: List[str]) -> Dict[str, Any]:
+    """Add, remove, promote or demote group participants. Visible to all members: only after explicit
+    confirmation from the user. Entries with a non-zero "error" in the result were not applied.
+
+    Args:
+        group_jid: The group JID, ending in @g.us
+        action: One of "add", "remove", "promote", "demote"
+        participants: Phone numbers with country code (e.g. "393331234567") or user JIDs
+    """
+    return _result(*whatsapp_update_group_participants(group_jid, action, participants))
+
+@mcp.tool()
+def get_group_invite_link(group_jid: str) -> Dict[str, Any]:
+    """Get the current invite link of a group (does NOT reset it). Use it for people whose privacy
+    settings block being added directly (error 403). Sending the link to someone is a separate
+    send_message, only after explicit confirmation from the user.
+
+    Args:
+        group_jid: The group JID, ending in @g.us
+    """
+    return _result(*whatsapp_get_group_invite_link(group_jid))
 
 if __name__ == "__main__":
     # Initialize and run the server

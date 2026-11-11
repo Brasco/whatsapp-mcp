@@ -807,6 +807,9 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 		})
 	}))
 
+	// Group administration endpoints (group_api.go)
+	registerGroupHandlers(client)
+
 	// Start the server
 	// Loopback only: the API has no authentication and /api/send reads
 	// an arbitrary file path from the request.

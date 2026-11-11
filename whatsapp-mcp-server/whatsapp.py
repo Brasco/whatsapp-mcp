@@ -765,3 +765,43 @@ def download_media(message_id: str, chat_jid: str) -> Optional[str]:
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
         return None
+
+
+# --- Group administration (bridge endpoints /api/groups/*) ---
+
+def _post_groups(path: str, payload: dict) -> Tuple[bool, object]:
+    try:
+        response = requests.post(f"{WHATSAPP_API_BASE_URL}/groups/{path}", json=payload, timeout=40)
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            return False, f"HTTP {response.status_code} - {response.text}"
+        if response.status_code == 200 and data.get("success"):
+            return True, data.get("result")
+        return False, data.get("message", f"HTTP {response.status_code}")
+    except requests.RequestException as e:
+        return False, f"Request error: {str(e)} (is the WhatsApp bridge running?)"
+
+
+def list_groups() -> Tuple[bool, object]:
+    return _post_groups("list", {})
+
+
+def get_group_info(group_jid: str) -> Tuple[bool, object]:
+    return _post_groups("info", {"jid": group_jid})
+
+
+def rename_group(group_jid: str, new_name: str) -> Tuple[bool, object]:
+    return _post_groups("rename", {"jid": group_jid, "name": new_name})
+
+
+def create_group(name: str, participants: List[str]) -> Tuple[bool, object]:
+    return _post_groups("create", {"name": name, "participants": participants})
+
+
+def update_group_participants(group_jid: str, action: str, participants: List[str]) -> Tuple[bool, object]:
+    return _post_groups("participants", {"jid": group_jid, "action": action, "participants": participants})
+
+
+def get_group_invite_link(group_jid: str) -> Tuple[bool, object]:
+    return _post_groups("invite_link", {"jid": group_jid})
