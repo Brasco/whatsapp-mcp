@@ -1,5 +1,12 @@
 # WhatsApp MCP Server
 
+> **About this fork.** Upstream ([lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp)) has not been updated since July 2025. This fork adds four changes on top of it, one commit each:
+>
+> 1. **whatsmeow update**: the pinned version can no longer connect; the bridge is adapted to the context-aware API.
+> 2. **REST API restricted to local clients**: listens on `127.0.0.1` only, and rejects requests with a foreign `Host`, an `Origin` header or a non-JSON `Content-Type` (DNS rebinding and cross-site requests from a browser). Upstream listens on all interfaces without authentication, and `/api/send` reads any file path it is given.
+> 3. **Documents keep their name and type**: `FileName` and a real MIME type are set, so recipients no longer get an "Untitled" file they cannot open.
+> 4. **Group administration**: bridge endpoints under `/api/groups/` and MCP tools `list_groups`, `get_group_info`, `rename_group`, `create_group`, `update_group_participants`, `get_group_invite_link`.
+
 This is a Model Context Protocol (MCP) server for WhatsApp.
 
 With this you can search and read your personal Whatsapp messages (including images, videos, documents, and audio messages), search your contacts and send messages to either individuals or groups. You can also send media files including images, videos, documents, and audio messages.
