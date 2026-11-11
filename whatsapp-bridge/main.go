@@ -675,10 +675,38 @@ func extractDirectPathFromURL(url string) string {
 	return "/" + pathPart
 }
 
+// localOnly rejects requests that do not come from the local MCP client.
+//   - Host must be localhost/127.0.0.1: blocks DNS rebinding.
+//   - No Origin header: browsers always send it on cross-site POSTs,
+//     the Python client (requests) does not.
+//   - Content-Type must be application/json: a browser cannot send it
+//     cross-origin without a CORS preflight, which is never allowed here.
+func localOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if i := strings.LastIndex(host, ":"); i >= 0 {
+			host = host[:i]
+		}
+		if host != "localhost" && host != "127.0.0.1" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if r.Header.Get("Origin") != "" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+			return
+		}
+		next(w, r)
+	}
+}
+
 // Start a REST API server to expose the WhatsApp client functionality
 func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port int) {
 	// Handler for sending messages
-	http.HandleFunc("/api/send", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/send", localOnly(func(w http.ResponseWriter, r *http.Request) {
 		// Only allow POST requests
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -721,10 +749,10 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 			Success: success,
 			Message: message,
 		})
-	})
+	}))
 
 	// Handler for downloading media
-	http.HandleFunc("/api/download", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/download", localOnly(func(w http.ResponseWriter, r *http.Request) {
 		// Only allow POST requests
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -772,10 +800,12 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 			Filename: filename,
 			Path:     path,
 		})
-	})
+	}))
 
 	// Start the server
-	serverAddr := fmt.Sprintf(":%d", port)
+	// Loopback only: the API has no authentication and /api/send reads
+	// an arbitrary file path from the request.
+	serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
 	fmt.Printf("Starting REST API server on %s...\n", serverAddr)
 
 	// Run server in a goroutine so it doesn't block
