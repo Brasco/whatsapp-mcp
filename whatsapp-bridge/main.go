@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"mime"
 	"net/http"
 	"os"
 	"os/signal"
@@ -279,7 +280,7 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 		// Document types (for any other file type)
 		default:
 			mediaType = whatsmeow.MediaDocument
-			mimeType = "application/octet-stream"
+			mimeType = documentMimeType(fileExt)
 		}
 
 		// Upload media to WhatsApp servers
@@ -345,8 +346,12 @@ func sendWhatsAppMessage(client *whatsmeow.Client, recipient string, message str
 				FileLength:    &resp.FileLength,
 			}
 		case whatsmeow.MediaDocument:
+			// FileName is what the recipient's client uses to name and open the
+			// file: without it the document arrives as "Untitled" with no extension.
+			fileName := filepath.Base(mediaPath)
 			msg.DocumentMessage = &waProto.DocumentMessage{
-				Title:         proto.String(mediaPath[strings.LastIndex(mediaPath, "/")+1:]),
+				FileName:      proto.String(fileName),
+				Title:         proto.String(fileName),
 				Caption:       proto.String(message),
 				Mimetype:      proto.String(mimeType),
 				URL:           &resp.URL,
@@ -1375,4 +1380,35 @@ func placeholderWaveform(duration uint32) []byte {
 	}
 
 	return waveform
+}
+
+// documentMimeType returns a real MIME type for documents, so the recipient's
+// client recognises the file (icon, preview, "open with") instead of a generic blob.
+func documentMimeType(ext string) string {
+	known := map[string]string{
+		"zip":  "application/zip",
+		"pdf":  "application/pdf",
+		"txt":  "text/plain",
+		"csv":  "text/csv",
+		"json": "application/json",
+		"stl":  "model/stl",
+		"7z":   "application/x-7z-compressed",
+		"rar":  "application/vnd.rar",
+		"doc":  "application/msword",
+		"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"xls":  "application/vnd.ms-excel",
+		"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		"ppt":  "application/vnd.ms-powerpoint",
+		"pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		"mp3":  "audio/mpeg",
+		"m4a":  "audio/mp4",
+		"wav":  "audio/wav",
+	}
+	if m, ok := known[ext]; ok {
+		return m
+	}
+	if m := mime.TypeByExtension("." + ext); m != "" {
+		return m
+	}
+	return "application/octet-stream"
 }
